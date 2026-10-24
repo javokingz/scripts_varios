@@ -51,7 +51,7 @@ Para configurar SSO desde cero: `aws configure sso --profile mi-perfil`. Si una 
 
 Las cifras de capacidad superiores son actuales, no un histórico. CPU y memoria representan utilización de recursos asignados al servicio, no porcentajes por contenedor individual. Un servicio sin tareas activas puede no publicar puntos. Los huecos se conservan: no se convierten en cero ni se interpolan. Container Insights no reconstruye datos anteriores a su activación. Las consultas de CloudWatch pueden generar cargos según el uso y la configuración de AWS.
 
-El inventario se consulta en cada interacción. Las series se mantienen únicamente en la sesión del navegador hasta cambiar los filtros o pulsar **Actualizar datos**; no hay refresco automático. La aplicación pagina inventarios y resultados de CloudWatch y divide consultas en lotes. Para clústeres grandes, selecciona pocos servicios al inicio.
+El inventario se consulta en cada interacción. Las series se mantienen únicamente en la sesión del navegador hasta cambiar los filtros o pulsar **Actualizar datos**; no hay refresco automático. La aplicación pagina inventarios y resultados de CloudWatch y divide consultas en lotes. El inventario, sus contadores y su CSV incluyen todos los servicios del clúster seleccionado. La selección de microservicios solo filtra las gráficas y el CSV de métricas; inicialmente incluye todos los servicios. Para clústeres grandes puedes reducir esa selección para comparar menos series.
 
 ## Permisos
 

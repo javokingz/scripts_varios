@@ -51,26 +51,31 @@ def main():
     if not cluster_arns:
         st.info("No hay clústeres ECS en esta cuenta y región.")
         return
+    st.caption(f"Clústeres encontrados en esta cuenta y región: {len(cluster_arns)}")
     cluster = st.selectbox("Clúster", cluster_arns, format_func=lambda arn: arn.rsplit("/", 1)[-1])
     current = aws.services(session, cluster)
     if current.empty:
         st.info("El clúster no tiene servicios ECS.")
         return
-    selected = st.multiselect("Microservicios para comparar", current.service.tolist(),
-                              default=current.service.head(3).tolist())
-    if not selected:
-        st.info("Selecciona al menos un servicio.")
-        return
-    snapshot = current[current.service.isin(selected)].copy()
     a, b, c, d = st.columns(4)
-    a.metric("Servicios seleccionados", len(snapshot))
-    b.metric("Tareas deseadas actuales", int(snapshot.desired.sum()))
-    c.metric("Tareas en ejecución actuales", int(snapshot.running.sum()))
-    d.metric("Tareas pendientes actuales", int(snapshot.pending.sum()))
-    st.caption(f"Inventario consultado: {datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC}")
-    st.dataframe(snapshot, hide_index=True, width="stretch")
-    csv_download(snapshot.assign(account=identity["Account"], region=region, cluster=cluster),
-                 "ecs_inventory.csv", "Descargar inventario CSV")
+    a.metric("Servicios del clúster", len(current))
+    b.metric("Tareas deseadas actuales", int(current.desired.sum()))
+    c.metric("Tareas en ejecución actuales", int(current.running.sum()))
+    d.metric("Tareas pendientes actuales", int(current.pending.sum()))
+    st.caption(f"Inventario completo del clúster seleccionado · Consultado: {datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC}")
+    st.dataframe(current, hide_index=True, width="stretch")
+    csv_download(current.assign(account=identity["Account"], region=region, cluster=cluster),
+                 "ecs_inventory.csv", "Descargar inventario completo CSV")
+    selected = st.multiselect(
+        "Microservicios para comparar en las gráficas", current.service.tolist(),
+        default=current.service.tolist(),
+        key=f"metric_services:{profile}:{region}:{cluster}",
+        help="Esta selección solo afecta las métricas históricas; el inventario y los contadores muestran todo el clúster.",
+    )
+    st.caption(f"Servicios seleccionados para métricas: {len(selected)} de {len(current)}")
+    if not selected:
+        st.info("Selecciona al menos un servicio para consultar las métricas históricas.")
+        return
     key = (profile, identity["Account"], region, cluster, tuple(selected), days, statistic, include_tasks)
     # Cache privado de esta sesión de navegador; nunca comparte datos entre usuarios.
     if refresh or st.session_state.get("history_key") != key:

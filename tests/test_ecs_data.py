@@ -62,6 +62,25 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(len(ecs.describe_services.call_args_list[0].kwargs['services']), 10)
         self.assertEqual(len(ecs.describe_services.call_args_list[1].kwargs['services']), 2)
 
+    def test_all_service_pages_are_described_for_large_clusters(self):
+        for count in (68, 34):
+            with self.subTest(count=count):
+                ecs = Mock()
+                names = [f'api-{i:02}' for i in range(count)]
+                ecs.get_paginator.return_value.paginate.return_value = [
+                    {'serviceArns': names[i:i + 10]} for i in range(0, count, 10)]
+                ecs.describe_services.side_effect = lambda **kwargs: {
+                    'services': [dict(serviceName=name, desiredCount=2, runningCount=1,
+                                      pendingCount=1, status='ACTIVE', taskDefinition='demo:1')
+                                 for name in kwargs['services']]}
+                with patch('ecs_data.client', return_value=ecs):
+                    result = ecs_data.services(None, 'prod')
+                self.assertEqual(len(result), count)
+                self.assertEqual(set(result.service), set(names))
+                self.assertEqual(result.desired.sum(), count * 2)
+                self.assertEqual(ecs.describe_services.call_count, (count + 9) // 10)
+                ecs.get_paginator.return_value.paginate.assert_called_once_with(cluster='prod')
+
 
 if __name__ == '__main__':
     unittest.main()
