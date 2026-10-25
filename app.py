@@ -7,9 +7,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 import ecs_data as aws
 
-st.set_page_config(page_title="ECS · Workloads", page_icon="📊", layout="wide")
-st.title("ECS · Comportamiento de microservicios")
-st.caption("Inventario actual de ECS y métricas históricas de CloudWatch · solo lectura")
+st.set_page_config(page_title="AWS · Workloads", page_icon="📊", layout="wide")
 
 
 def csv_download(frame, filename, label):
@@ -18,6 +16,8 @@ def csv_download(frame, filename, label):
 
 
 def main():
+    st.title("ECS · Comportamiento de microservicios")
+    st.caption("Inventario actual de ECS y métricas históricas de CloudWatch · solo lectura")
     available = aws.profiles()
     if not available:
         st.warning("No hay perfiles AWS CLI. Configura uno con aws configure sso o aws configure.")
@@ -120,7 +120,11 @@ def main():
 
 if __name__ == "__main__":
     try:
-        main()
+        page = st.navigation([
+            st.Page(main, title="ECS", icon=":material/apps:", default=True),
+            st.Page("app_pages/rds.py", title="RDS", icon=":material/database:", url_path="rds"),
+        ])
+        page.run()
     except (BotoCoreError, ClientError, RuntimeError, ValueError) as error:
         st.error(f"No fue posible completar la consulta: {error}")
         st.info("Revisa la sesión SSO, la conectividad, el perfil, la región y los permisos IAM. "

@@ -1,4 +1,4 @@
-# Dashboard ECS con Streamlit
+# Dashboard ECS y RDS con Streamlit
 
 Prototipo local de solo lectura para comparar cargas de microservicios ECS en distintas cuentas AWS usando perfiles de AWS CLI, roles y SSO. No guarda credenciales ni modifica servicios.
 
@@ -62,7 +62,7 @@ El usuario/rol necesita estas acciones de lectura en cada cuenta (ejemplo para u
   "Version": "2012-10-17",
   "Statement": [{
     "Effect": "Allow",
-    "Action": ["ecs:ListClusters", "ecs:ListServices", "ecs:DescribeServices", "cloudwatch:GetMetricData"],
+    "Action": ["ecs:ListClusters", "ecs:ListServices", "ecs:DescribeServices", "rds:DescribeDBInstances", "cloudwatch:GetMetricData"],
     "Resource": "*"
   }]
 }
@@ -79,3 +79,11 @@ python -m unittest discover -s tests -v
 Las pruebas usan respuestas simuladas y no requieren credenciales. La validación real depende de perfiles locales autorizados y de métricas publicadas. Este prototipo está pensado para ejecución local; todos los usuarios de un mismo servidor Streamlit usarían los perfiles del proceso servidor.
 
 Referencias: [credenciales Boto3](https://docs.aws.amazon.com/boto3/latest/guide/credentials.html), [utilización ECS](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service_utilization.html), [Container Insights ECS](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Container-Insights-metrics-ECS.html), [GetMetricData](https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_GetMetricData.html).
+
+## Módulo RDS
+
+El menú lateral ofrece enlaces a **ECS** y **RDS** (ruta `/rds`). En RDS selecciona perfil, región e instancias para comparar CPU (%), memoria disponible (GiB) y conexiones. Incluye instancias Aurora listadas por RDS. Se pueden elegir 1, 7, 14 o 30 días, promedio o máximo por intervalo y descargar inventario y métricas CSV. Los datos históricos se conservan en la sesión del navegador hasta cambiar filtros o pulsar **Actualizar datos**.
+
+Se consultan `CPUUtilization`, `FreeableMemory` y `DatabaseConnections` de `AWS/RDS` por `DBInstanceIdentifier`. La memoria representa RAM disponible, no porcentaje usado; el CSV conserva el valor original en bytes y su unidad. El resumen y la gráfica convierten memoria a GiB. Los puntos ausentes se conservan como huecos. Los valores de conexiones agregados por promedio pueden ser decimales. Este módulo requiere `rds:DescribeDBInstances` además de los permisos compartidos de CloudWatch y STS.
+
+Referencia: [métricas oficiales de RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-metrics.html).

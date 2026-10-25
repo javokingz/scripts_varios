@@ -75,6 +75,11 @@ def history(session, cluster, names, days, statistic="Average", include_tasks=Fa
                 "Dimensions": [{"Name": "ClusterName", "Value": cluster.rsplit("/", 1)[-1]},
                                {"Name": "ServiceName", "Value": name}]},
                 "Period": period, "Stat": statistic}, "ReturnData": True})
+    return metric_history(session, queries, lookup, start, end, period)
+
+
+def metric_history(session, queries, lookup, start, end, period):
+    """Consulta series paginadas; conserva huecos y avisos de CloudWatch."""
     rows, warnings = [], []
     cw = client(session, "cloudwatch")
     for offset in range(0, len(queries), 100):

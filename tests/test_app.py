@@ -37,6 +37,35 @@ class DashboardTests(unittest.TestCase):
             self.assertFalse(app.exception)
             self.assertEqual(history.call_count, 2)
 
+    def test_rds_navigation_history_and_refresh(self):
+        now = datetime.now(timezone.utc)
+        inventory = pd.DataFrame([dict(instance='db-a', engine='postgres', status='available')])
+        frame = pd.DataFrame([
+            dict(timestamp=now, instance='db-a', metric=metric, value=value, unit=unit)
+            for metric, value, unit in [('CPUUtilization', 42, '%'),
+                                       ('FreeableMemory', 1073741824, 'Bytes'),
+                                       ('DatabaseConnections', 5, 'Count')]])
+        client = Mock()
+        client.get_caller_identity.return_value = {'Account': '123456789012'}
+        with patch('ecs_data.profiles', return_value={'demo': '123456789012'}), \
+             patch('ecs_data.session_for', return_value=Mock(region_name='us-east-1')), \
+             patch('ecs_data.client', return_value=client), \
+             patch('ecs_data.clusters', return_value=[]), \
+             patch('rds_data.instances', return_value=inventory), \
+             patch('rds_data.history', return_value=(frame, [], now, now, 300)) as history:
+            app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / 'app.py')).run()
+            app.switch_page('app_pages/rds.py').run()
+            self.assertFalse(app.exception)
+            self.assertEqual([item.value for item in app.subheader][:3],
+                             ['CPU (%)', 'Memoria disponible (GiB)', 'Conexiones'])
+            next(w for w in app.selectbox if w.label == 'Histórico').select(30).run()
+            self.assertFalse(app.exception)
+            self.assertEqual(history.call_args.args[2], 30)
+            calls = history.call_count
+            app.sidebar.button[0].click().run()
+            self.assertEqual(history.call_count, calls + 1)
+            self.assertFalse(app.exception)
+
     def test_large_clusters_inventory_independent_of_chart_selection(self):
         now = datetime.now(timezone.utc)
         inventories = {
