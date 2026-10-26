@@ -66,16 +66,13 @@ def main():
     st.dataframe(current, hide_index=True, width="stretch")
     csv_download(current.assign(account=identity["Account"], region=region, cluster=cluster),
                  "ecs_inventory.csv", "Descargar inventario completo CSV")
-    selected = st.multiselect(
-        "Microservicios para comparar en las gráficas", current.service.tolist(),
-        default=current.service.tolist(),
-        key=f"metric_services:{profile}:{region}:{cluster}",
-        help="Esta selección solo afecta las métricas históricas; el inventario y los contadores muestran todo el clúster.",
+    service = st.selectbox(
+        "Servicio para mostrar en las gráficas", current.service.tolist(),
+        key=f"metric_service:{profile}:{region}:{cluster}",
+        help="El inventario y los contadores muestran todo el clúster; las gráficas muestran solo el servicio elegido.",
     )
-    st.caption(f"Servicios seleccionados para métricas: {len(selected)} de {len(current)}")
-    if not selected:
-        st.info("Selecciona al menos un servicio para consultar las métricas históricas.")
-        return
+    selected = [service]
+    st.caption(f"Métricas del servicio: {service}")
     key = (profile, identity["Account"], region, cluster, tuple(selected), days, statistic, include_tasks)
     # Cache privado de esta sesión de navegador; nunca comparte datos entre usuarios.
     if refresh or st.session_state.get("history_key") != key:

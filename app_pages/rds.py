@@ -46,11 +46,10 @@ st.dataframe(current, hide_index=True, width="stretch")
 st.download_button("Descargar inventario completo CSV",
                    current.assign(account=identity["Account"], region=region).to_csv(index=False).encode("utf-8-sig"),
                    "rds_inventory.csv", "text/csv")
-selected = st.multiselect("Instancias para comparar en las gráficas", current.instance.tolist(),
-                          default=current.instance.tolist(), key=f"rds_instances:{profile}:{region}")
-if not selected:
-    st.info("Selecciona al menos una instancia para consultar las métricas históricas.")
-    st.stop()
+instance = st.selectbox("Instancia para mostrar en las gráficas", current.instance.tolist(),
+                        key=f"rds_instance:{profile}:{region}")
+selected = [instance]
+st.caption(f"Métricas de la instancia: {instance}")
 key = (profile, identity["Account"], region, tuple(selected), days, statistic)
 if refresh or st.session_state.get("rds_history_key") != key:
     with st.spinner("Consultando métricas de CloudWatch…"):

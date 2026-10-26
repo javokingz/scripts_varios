@@ -51,7 +51,7 @@ Para configurar SSO desde cero: `aws configure sso --profile mi-perfil`. Si una 
 
 Las cifras de capacidad superiores son actuales, no un histórico. CPU y memoria representan utilización de recursos asignados al servicio, no porcentajes por contenedor individual. Un servicio sin tareas activas puede no publicar puntos. Los huecos se conservan: no se convierten en cero ni se interpolan. Container Insights no reconstruye datos anteriores a su activación. Las consultas de CloudWatch pueden generar cargos según el uso y la configuración de AWS.
 
-El inventario se consulta en cada interacción. Las series se mantienen únicamente en la sesión del navegador hasta cambiar los filtros o pulsar **Actualizar datos**; no hay refresco automático. La aplicación pagina inventarios y resultados de CloudWatch y divide consultas en lotes. El inventario, sus contadores y su CSV incluyen todos los servicios del clúster seleccionado. La selección de microservicios solo filtra las gráficas y el CSV de métricas; inicialmente incluye todos los servicios. Para clústeres grandes puedes reducir esa selección para comparar menos series.
+El inventario se consulta en cada interacción. Las series se mantienen únicamente en la sesión del navegador hasta cambiar los filtros o pulsar **Actualizar datos**; no hay refresco automático. La aplicación pagina inventarios y resultados de CloudWatch y divide consultas en lotes. El inventario, sus contadores y su CSV incluyen todos los servicios del clúster seleccionado. La lista desplegable permite elegir un solo servicio; las gráficas y el CSV de métricas corresponden únicamente a ese servicio.
 
 ## Permisos
 
@@ -82,7 +82,7 @@ Referencias: [credenciales Boto3](https://docs.aws.amazon.com/boto3/latest/guide
 
 ## Módulo RDS
 
-El menú lateral ofrece enlaces a **ECS** y **RDS** (ruta `/rds`). En RDS selecciona perfil, región e instancias para comparar CPU (%), memoria disponible (GiB) y conexiones. Incluye instancias Aurora listadas por RDS. Se pueden elegir 1, 7, 14 o 30 días, promedio o máximo por intervalo y descargar inventario y métricas CSV. Los datos históricos se conservan en la sesión del navegador hasta cambiar filtros o pulsar **Actualizar datos**.
+El menú lateral ofrece enlaces a **ECS** y **RDS** (ruta `/rds`). En RDS selecciona perfil, región y una instancia de la lista desplegable para consultar CPU (%), memoria disponible (GiB) y conexiones. Incluye instancias Aurora listadas por RDS. Se pueden elegir 1, 7, 14 o 30 días, promedio o máximo por intervalo y descargar inventario y métricas CSV. Los datos históricos se conservan en la sesión del navegador hasta cambiar filtros o pulsar **Actualizar datos**.
 
 Se consultan `CPUUtilization`, `FreeableMemory` y `DatabaseConnections` de `AWS/RDS` por `DBInstanceIdentifier`. La memoria representa RAM disponible, no porcentaje usado; el CSV conserva el valor original en bytes y su unidad. El resumen y la gráfica convierten memoria a GiB. Los puntos ausentes se conservan como huecos. Los valores de conexiones agregados por promedio pueden ser decimales. Este módulo requiere `rds:DescribeDBInstances` además de los permisos compartidos de CloudWatch y STS.
 
