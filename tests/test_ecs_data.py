@@ -9,6 +9,24 @@ import ecs_data
 
 
 class MetricsTests(unittest.TestCase):
+    def test_cpu_summary_weighted_mean_max_and_missing(self):
+        cw = Mock()
+        first = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        second = datetime(2026, 1, 2, tzinfo=timezone.utc)
+        cw.get_metric_data.return_value = {'MetricDataResults': [
+            dict(Id='m0', Timestamps=[first, second], Values=[20, 180]),
+            dict(Id='m1', Timestamps=[first, second], Values=[2, 3]),
+            dict(Id='m2', Timestamps=[first, second], Values=[15, 90])]}
+        with patch('ecs_data.client', return_value=cw):
+            result, warnings, start, end = ecs_data.cpu_summary(None, 'demo', ['api', 'empty'], 7)
+        self.assertEqual(result.iloc[0].cpu_mean, 40)
+        self.assertEqual(result.iloc[0].cpu_max, 90)
+        self.assertTrue(result.iloc[1][['cpu_mean', 'cpu_max']].isna().all())
+        queries = cw.get_metric_data.call_args.kwargs['MetricDataQueries']
+        self.assertEqual([q['MetricStat']['Stat'] for q in queries[:3]],
+                         ['Sum', 'SampleCount', 'Maximum'])
+        self.assertEqual((end-start).days, 7)
+
     def test_pagination_missing_points_and_dimensions(self):
         cw = boto3.client('cloudwatch', region_name='us-east-1',
                           aws_access_key_id='testing', aws_secret_access_key='testing')

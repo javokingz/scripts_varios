@@ -63,8 +63,24 @@ def main():
     c.metric("Tareas en ejecución actuales", int(current.running.sum()))
     d.metric("Tareas pendientes actuales", int(current.pending.sum()))
     st.caption(f"Inventario completo del clúster seleccionado · Consultado: {datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC}")
-    st.dataframe(current, hide_index=True, width="stretch")
-    csv_download(current.assign(account=identity["Account"], region=region, cluster=cluster),
+    cpu_key = (profile, identity["Account"], region, cluster, tuple(current.service), days)
+    if refresh or st.session_state.get("cpu_summary_key") != cpu_key:
+        with st.spinner("Consultando CPU de los servicios…"):
+            result = aws.cpu_summary(session, cluster, current.service.tolist(), days)
+        st.session_state.cpu_summary_result = result
+        st.session_state.cpu_summary_key = cpu_key
+    cpu, cpu_warnings, cpu_start, cpu_end = st.session_state.cpu_summary_result
+    inventory = current.drop(columns=["task_definition"], errors="ignore").merge(cpu, on="service", how="left")
+    st.caption(f"CPU del histórico UTC: {cpu_start:%Y-%m-%d %H:%M} → {cpu_end:%Y-%m-%d %H:%M}. "
+               "mean: promedio ponderado por muestras; máximo: mayor valor publicado. Sin datos se muestra vacío.")
+    for warning in cpu_warnings:
+        st.warning(warning)
+    st.dataframe(inventory, hide_index=True, width="stretch", column_config={
+        "cpu_mean": st.column_config.NumberColumn("CPU mean (%)", format="%.2f"),
+        "cpu_max": st.column_config.NumberColumn("CPU máximo (%)", format="%.2f"),
+    })
+    csv_download(inventory.assign(account=identity["Account"], region=region, cluster=cluster,
+                                  cpu_start_utc=cpu_start, cpu_end_utc=cpu_end),
                  "ecs_inventory.csv", "Descargar inventario completo CSV")
     service = st.selectbox(
         "Servicio para mostrar en las gráficas", current.service.tolist(),

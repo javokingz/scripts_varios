@@ -8,6 +8,15 @@ from streamlit.testing.v1 import AppTest
 
 
 class DashboardTests(unittest.TestCase):
+    def setUp(self):
+        now = datetime.now(timezone.utc)
+        def summary(session, cluster, names, days):
+            return (pd.DataFrame([dict(service=name, cpu_mean=12.5, cpu_max=80.0)
+                                  for name in names]), [], now, now)
+        patcher = patch('ecs_data.cpu_summary', side_effect=summary)
+        self.cpu_summary = patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_no_profiles(self):
         with patch('ecs_data.profiles', return_value={}):
             app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / 'app.py')).run()
@@ -32,6 +41,10 @@ class DashboardTests(unittest.TestCase):
             self.assertFalse(app.exception)
             self.assertEqual(app.metric[1].value, '2')
             self.assertEqual(app.metric[2].value, '1')
+            table = app.dataframe[0].value
+            self.assertNotIn('task_definition', table.columns)
+            self.assertEqual(table.iloc[0].cpu_mean, 12.5)
+            self.assertEqual(table.iloc[0].cpu_max, 80.0)
             self.assertTrue(any('Sin puntos' in info.value for info in app.info))
             app.sidebar.button[0].click().run()
             self.assertFalse(app.exception)
@@ -96,6 +109,10 @@ class DashboardTests(unittest.TestCase):
             self.assertEqual(app.metric[1].value, '136')
             self.assertEqual(len(app.dataframe[0].value), 68)
             self.assertEqual(history.call_args.args[2], ['prod-api-01'])
+            self.assertEqual(self.cpu_summary.call_count, 1)
+            next(w for w in app.selectbox if w.label == 'Histórico').select(7).run()
+            self.assertEqual(self.cpu_summary.call_args.args[3], 7)
+            self.assertEqual(len(self.cpu_summary.call_args.args[2]), 68)
             for cluster, count in [('shadow', 34), ('test', 2)]:
                 next(w for w in app.selectbox if w.label == 'Clúster').select(cluster).run()
                 self.assertFalse(app.exception)

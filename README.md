@@ -42,7 +42,7 @@ Para configurar SSO desde cero: `aws configure sso --profile mi-perfil`. Si una 
 
 ## Qué muestra
 
-- Inventario actual por servicio: tareas deseadas, en ejecución, pendientes, estado y definición de tarea.
+- Inventario actual por servicio: tareas deseadas, en ejecución, pendientes, estado, CPU mean (%) y CPU máximo (%).
 - CPU y memoria porcentuales por servicio de `AWS/ECS`, comparables en gráficas.
 - Últimas 24 horas, 7, 14 o 30 días, con intervalos de 5, 15, 30 o 60 minutos respectivamente. Todas las fechas se muestran en UTC.
 - Promedio o máximo por intervalo; el resumen se calcula sobre esos puntos agregados (no sobre muestras originales).
@@ -87,3 +87,5 @@ El menú lateral ofrece enlaces a **ECS** y **RDS** (ruta `/rds`). En RDS selecc
 Se consultan `CPUUtilization`, `FreeableMemory` y `DatabaseConnections` de `AWS/RDS` por `DBInstanceIdentifier`. La memoria representa RAM disponible, no porcentaje usado; el CSV conserva el valor original en bytes y su unidad. El resumen y la gráfica convierten memoria a GiB. Los puntos ausentes se conservan como huecos. Los valores de conexiones agregados por promedio pueden ser decimales. Este módulo requiere `rds:DescribeDBInstances` además de los permisos compartidos de CloudWatch y STS.
 
 Referencia: [métricas oficiales de RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-metrics.html).
+
+La tabla inicial de ECS incluye CPU de todos los servicios durante el histórico seleccionado. `cpu_mean` se calcula como suma de CPU dividida entre el número de muestras publicadas y `cpu_max` como el mayor máximo publicado, independientemente de la estadística elegida para las gráficas. Sin muestras, los campos quedan vacíos. El CSV de inventario incluye estas columnas y la ventana UTC. Cambiar el servicio de las gráficas no vuelve a consultar este resumen; cambiar el histórico o pulsar Actualizar sí. Estas métricas requieren consultas adicionales de CloudWatch para todos los servicios del clúster.

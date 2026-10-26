@@ -78,6 +78,35 @@ def history(session, cluster, names, days, statistic="Average", include_tasks=Fa
     return metric_history(session, queries, lookup, start, end, period)
 
 
+def cpu_summary(session, cluster, names, days):
+    """Promedio ponderado por muestras y máximo real de CPU en la ventana."""
+    end = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    start = end - timedelta(days=days)
+    period = {1: 300, 7: 900, 14: 1800, 30: 3600}[days]
+    queries, lookup = [], {}
+    for name in names:
+        for statistic in ("Sum", "SampleCount", "Maximum"):
+            key = f"m{len(queries)}"
+            lookup[key] = (name, statistic)
+            queries.append({"Id": key, "MetricStat": {"Metric": {
+                "Namespace": "AWS/ECS", "MetricName": "CPUUtilization",
+                "Dimensions": [{"Name": "ClusterName", "Value": cluster.rsplit("/", 1)[-1]},
+                               {"Name": "ServiceName", "Value": name}]},
+                "Period": period, "Stat": statistic}, "ReturnData": True})
+    frame, warnings, start, end, _ = metric_history(session, queries, lookup, start, end, period)
+    rows = []
+    for name in names:
+        subset = frame[frame.service == name]
+        sums = subset[subset.metric == "Sum"].set_index("timestamp").value
+        counts = subset[subset.metric == "SampleCount"].set_index("timestamp").value
+        paired = pd.concat([sums.rename("sum"), counts.rename("count")], axis=1).dropna()
+        count = paired["count"].sum()
+        rows.append({"service": name,
+                     "cpu_mean": paired["sum"].sum() / count if count else float("nan"),
+                     "cpu_max": subset[subset.metric == "Maximum"].value.max()})
+    return pd.DataFrame(rows, columns=["service", "cpu_mean", "cpu_max"]), warnings, start, end
+
+
 def metric_history(session, queries, lookup, start, end, period):
     """Consulta series paginadas; conserva huecos y avisos de CloudWatch."""
     rows, warnings = [], []
