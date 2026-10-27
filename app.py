@@ -71,11 +71,29 @@ def main():
         st.session_state.cpu_summary_key = cpu_key
     cpu, cpu_warnings, cpu_start, cpu_end = st.session_state.cpu_summary_result
     inventory = current.drop(columns=["task_definition"], errors="ignore").merge(cpu, on="service", how="left")
+    try:
+        limits = aws.task_limits(session, cluster, current.service.tolist())
+    except ClientError as error:
+        if error.response["Error"]["Code"] not in ("AccessDenied", "AccessDeniedException", "UnauthorizedOperation"):
+            raise
+        st.warning("No se pudieron consultar los límites de tareas. Se requiere el permiso "
+                   "application-autoscaling:DescribeScalableTargets.")
+        limits = pd.DataFrame(columns=["service", "tasks_min", "tasks_max"])
+    inventory = inventory.merge(limits, on="service", how="left")
+    for column in ("tasks_min", "tasks_max"):
+        inventory[column] = inventory[column].astype("Int64")
+    inventory = inventory[["service", "desired", "tasks_min", "tasks_max"] +
+                          [column for column in inventory if column not in
+                           ("service", "desired", "tasks_min", "tasks_max")]]
+    st.caption("Mínimo y máximo de tareas: límites actuales de Auto Scaling; vacíos si no está configurado "
+               "o no se pudo consultar. No representan valores históricos.")
     st.caption(f"CPU del histórico UTC: {cpu_start:%Y-%m-%d %H:%M} → {cpu_end:%Y-%m-%d %H:%M}. "
                "mean: promedio ponderado por muestras; máximo: mayor valor publicado. Sin datos se muestra vacío.")
     for warning in cpu_warnings:
         st.warning(warning)
     st.dataframe(inventory, hide_index=True, width="stretch", column_config={
+        "tasks_min": st.column_config.NumberColumn("Tareas mínimo", format="%d"),
+        "tasks_max": st.column_config.NumberColumn("Tareas máximo", format="%d"),
         "cpu_mean": st.column_config.NumberColumn("CPU mean (%)", format="%.2f"),
         "cpu_max": st.column_config.NumberColumn("CPU máximo (%)", format="%.2f"),
     })
@@ -136,6 +154,7 @@ if __name__ == "__main__":
         page = st.navigation([
             st.Page(main, title="ECS", icon=":material/apps:", default=True),
             st.Page("app_pages/rds.py", title="RDS", icon=":material/database:", url_path="rds"),
+            st.Page("app_pages/elasticache.py", title="ElastiCache", icon=":material/memory:", url_path="elasticache"),
         ])
         page.run()
     except (BotoCoreError, ClientError, RuntimeError, ValueError) as error:

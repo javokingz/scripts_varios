@@ -16,6 +16,11 @@ class DashboardTests(unittest.TestCase):
         patcher = patch('ecs_data.cpu_summary', side_effect=summary)
         self.cpu_summary = patcher.start()
         self.addCleanup(patcher.stop)
+        limits = patch('ecs_data.task_limits', side_effect=lambda session, cluster, names:
+                       pd.DataFrame([dict(service=name, tasks_min=1, tasks_max=10) for name in names]))
+        limits.start()
+        self.addCleanup(limits.stop)
+
 
     def test_no_profiles(self):
         with patch('ecs_data.profiles', return_value={}):
@@ -45,6 +50,8 @@ class DashboardTests(unittest.TestCase):
             self.assertNotIn('task_definition', table.columns)
             self.assertEqual(table.iloc[0].cpu_mean, 12.5)
             self.assertEqual(table.iloc[0].cpu_max, 80.0)
+            self.assertEqual(table.iloc[0].tasks_min, 1)
+            self.assertEqual(table.iloc[0].tasks_max, 10)
             self.assertTrue(any('Sin puntos' in info.value for info in app.info))
             app.sidebar.button[0].click().run()
             self.assertFalse(app.exception)
@@ -65,15 +72,66 @@ class DashboardTests(unittest.TestCase):
              patch('ecs_data.client', return_value=client), \
              patch('ecs_data.clusters', return_value=[]), \
              patch('rds_data.instances', return_value=inventory), \
+             patch('rds_data.utilization_summary', return_value=(pd.DataFrame([
+                 dict(instance='db-a', cpu_mean=20, cpu_max=42, memory_mean=1.5, memory_max=2)
+             ]), [], now, now)) as utilization, \
              patch('rds_data.history', return_value=(frame, [], now, now, 300)) as history:
             app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / 'app.py')).run()
             app.switch_page('app_pages/rds.py').run()
             self.assertFalse(app.exception)
+            table = app.dataframe[0].value
+            self.assertEqual(table.iloc[0].cpu_mean, 20)
+            self.assertEqual(table.iloc[0].cpu_max, 42)
+            self.assertEqual(table.iloc[0].memory_mean, 1.5)
+            self.assertEqual(table.iloc[0].memory_max, 2)
+            self.assertEqual(utilization.call_args.args[1], ['db-a'])
             self.assertEqual([item.value for item in app.subheader][:3],
                              ['CPU (%)', 'Memoria disponible (GiB)', 'Conexiones'])
             next(w for w in app.selectbox if w.label == 'Histórico').select(30).run()
             self.assertFalse(app.exception)
             self.assertEqual(history.call_args.args[2], 30)
+            self.assertEqual(utilization.call_args.args[2], 30)
+            calls = history.call_count
+            app.sidebar.button[0].click().run()
+            self.assertEqual(history.call_count, calls + 1)
+            self.assertFalse(app.exception)
+
+    def test_elasticache_navigation_history_and_refresh(self):
+        now = datetime.now(timezone.utc)
+        inventory = pd.DataFrame([dict(node='redis-a/0001', engine='postgres', status='available')])
+        frame = pd.DataFrame([
+            dict(timestamp=now, node='redis-a/0001', metric=metric, value=value, unit=unit)
+            for metric, value, unit in [('CPUUtilization', 42, '%'),
+                                       ('FreeableMemory', 1073741824, 'Bytes'),
+                                       ('CurrConnections', 5, 'Count')]])
+        client = Mock()
+        client.get_caller_identity.return_value = {'Account': '123456789012'}
+        with patch('ecs_data.profiles', return_value={'demo': '123456789012'}), \
+             patch('ecs_data.session_for', return_value=Mock(region_name='us-east-1')), \
+             patch('ecs_data.client', return_value=client), \
+             patch('ecs_data.clusters', return_value=[]), \
+             patch('elasticache_data.nodes', return_value=inventory), \
+             patch('elasticache_data.utilization_summary', return_value=(pd.DataFrame([
+                 dict(node='redis-a/0001', cpu_mean=20, cpu_max=42, memory_mean=1.5, memory_max=2, connections_mean=4, connections_max=8)
+             ]), [], now, now)) as utilization, \
+             patch('elasticache_data.history', return_value=(frame, [], now, now, 300)) as history:
+            app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / 'app.py')).run()
+            app.switch_page('app_pages/elasticache.py').run()
+            self.assertFalse(app.exception)
+            table = app.dataframe[0].value
+            self.assertEqual(table.iloc[0].cpu_mean, 20)
+            self.assertEqual(table.iloc[0].cpu_max, 42)
+            self.assertEqual(table.iloc[0].memory_mean, 1.5)
+            self.assertEqual(table.iloc[0].memory_max, 2)
+            self.assertEqual(utilization.call_args.args[1], ['redis-a/0001'])
+            self.assertEqual(table.iloc[0].connections_mean, 4)
+            self.assertEqual(table.iloc[0].connections_max, 8)
+            self.assertEqual([item.value for item in app.subheader][:3],
+                             ['CPU (%)', 'Memoria disponible (GiB)', 'Conexiones'])
+            next(w for w in app.selectbox if w.label == 'Histórico').select(30).run()
+            self.assertFalse(app.exception)
+            self.assertEqual(history.call_args.args[2], 30)
+            self.assertEqual(utilization.call_args.args[2], 30)
             calls = history.call_count
             app.sidebar.button[0].click().run()
             self.assertEqual(history.call_count, calls + 1)

@@ -59,6 +59,29 @@ def services(session, cluster):
     return pd.DataFrame(rows, columns=["service", "desired", "running", "pending", "status", "task_definition"]).sort_values("service")
 
 
+def task_limits(session, cluster, names):
+    """Límites actuales de Service Auto Scaling; ausentes si no hay target."""
+    scaling = client(session, "application-autoscaling")
+    cluster_name = cluster.rsplit("/", 1)[-1]
+    resources = {f"service/{cluster_name}/{name}": name for name in names}
+    rows = []
+    identifiers = list(resources)
+    for offset in range(0, len(identifiers), 50):
+        params = dict(ServiceNamespace="ecs", ScalableDimension="ecs:service:DesiredCount",
+                      ResourceIds=identifiers[offset:offset + 50])
+        while True:
+            response = scaling.describe_scalable_targets(**params)
+            for target in response.get("ScalableTargets", []):
+                name = resources.get(target["ResourceId"])
+                if name is not None:
+                    rows.append({"service": name, "tasks_min": target["MinCapacity"],
+                                 "tasks_max": target["MaxCapacity"]})
+            if not response.get("NextToken"):
+                break
+            params["NextToken"] = response["NextToken"]
+    return pd.DataFrame(rows, columns=["service", "tasks_min", "tasks_max"])
+
+
 def history(session, cluster, names, days, statistic="Average", include_tasks=False):
     end = datetime.now(timezone.utc).replace(second=0, microsecond=0)
     start = end - timedelta(days=days)

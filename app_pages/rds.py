@@ -42,9 +42,29 @@ if current.empty:
     st.info("No hay instancias RDS en esta cuenta y región.")
     st.stop()
 st.metric("Instancias RDS", len(current))
-st.dataframe(current, hide_index=True, width="stretch")
+summary_key = (profile, identity["Account"], region, tuple(current.instance), days)
+if refresh or st.session_state.get("rds_summary_key") != summary_key:
+    with st.spinner("Consultando CPU y memoria de las instancias…"):
+        result = rds.utilization_summary(session, current.instance.tolist(), days)
+    st.session_state.rds_summary_result = result
+    st.session_state.rds_summary_key = summary_key
+utilization, summary_warnings, summary_start, summary_end = st.session_state.rds_summary_result
+inventory = current.merge(utilization, on="instance", how="left")
+st.caption(f"Histórico UTC: {summary_start:%Y-%m-%d %H:%M} → {summary_end:%Y-%m-%d %H:%M}. "
+           "mean: promedio ponderado por muestras; máximo: mayor valor publicado. "
+           "La memoria es disponible (GiB), no memoria usada. Sin datos se muestra vacío.")
+for warning in summary_warnings:
+    st.warning(warning)
+st.dataframe(inventory, hide_index=True, width="stretch", column_config={
+    "cpu_mean": st.column_config.NumberColumn("CPU mean (%)", format="%.2f"),
+    "cpu_max": st.column_config.NumberColumn("CPU máximo (%)", format="%.2f"),
+    "memory_mean": st.column_config.NumberColumn("Memoria disponible mean (GiB)", format="%.2f"),
+    "memory_max": st.column_config.NumberColumn("Memoria disponible máximo (GiB)", format="%.2f"),
+})
 st.download_button("Descargar inventario completo CSV",
-                   current.assign(account=identity["Account"], region=region).to_csv(index=False).encode("utf-8-sig"),
+                   inventory.assign(account=identity["Account"], region=region,
+                                    summary_start_utc=summary_start, summary_end_utc=summary_end,
+                                    memory_unit="GiB", cpu_unit="%").to_csv(index=False).encode("utf-8-sig"),
                    "rds_inventory.csv", "text/csv")
 instance = st.selectbox("Instancia para mostrar en las gráficas", current.instance.tolist(),
                         key=f"rds_instance:{profile}:{region}")

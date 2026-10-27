@@ -9,6 +9,26 @@ import ecs_data
 
 
 class MetricsTests(unittest.TestCase):
+    def test_task_limits_batches_pages_and_zero(self):
+        scaling = Mock()
+        scaling.describe_scalable_targets.side_effect = [
+            {'ScalableTargets': [{'ResourceId': 'service/prod/api-0', 'MinCapacity': 0, 'MaxCapacity': 10}],
+             'NextToken': 'next'},
+            {'ScalableTargets': []},
+            {'ScalableTargets': [{'ResourceId': 'service/prod/api-50', 'MinCapacity': 2, 'MaxCapacity': 20}]}]
+        with patch('ecs_data.client', return_value=scaling):
+            result = ecs_data.task_limits(None, 'arn:aws:ecs:us-east-1:123:cluster/prod',
+                                           [f'api-{i}' for i in range(51)])
+        calls = scaling.describe_scalable_targets.call_args_list
+        self.assertEqual(len(calls[0].kwargs['ResourceIds']), 50)
+        self.assertEqual(calls[1].kwargs['NextToken'], 'next')
+        self.assertEqual(calls[2].kwargs['ResourceIds'], ['service/prod/api-50'])
+        self.assertEqual(result.tasks_min.tolist(), [0, 2])
+        self.assertEqual(result.tasks_max.tolist(), [10, 20])
+        with patch('ecs_data.client', return_value=Mock(
+                describe_scalable_targets=Mock(return_value={'ScalableTargets': []}))):
+            self.assertTrue(ecs_data.task_limits(None, 'prod', ['manual']).empty)
+
     def test_cpu_summary_weighted_mean_max_and_missing(self):
         cw = Mock()
         first = datetime(2026, 1, 1, tzinfo=timezone.utc)

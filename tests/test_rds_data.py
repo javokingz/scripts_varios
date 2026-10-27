@@ -42,3 +42,24 @@ class RdsTests(unittest.TestCase):
         self.assertEqual(period, 1800)
         self.assertEqual((end-start).days, 14)
         self.assertFalse(warnings)
+
+    def test_summary_weighted_mean_and_memory_conversion(self):
+        client = Mock()
+        timestamps = [datetime(2026, 1, day, tzinfo=timezone.utc) for day in (1, 2)]
+        client.get_metric_data.return_value = {'MetricDataResults': [
+            dict(Id=f'm{i}', Timestamps=timestamps, Values=values)
+            for i, values in enumerate(([20, 180], [2, 3], [15, 90],
+                                         [2 * 1024**3, 6 * 1024**3], [2, 3],
+                                         [1024**3, 3 * 1024**3]))]}
+        with patch('ecs_data.client', return_value=client):
+            frame, warnings, start, end = rds_data.utilization_summary(None, ['db-a', 'empty'], 7)
+        self.assertEqual(frame.iloc[0].cpu_mean, 40)
+        self.assertEqual(frame.iloc[0].cpu_max, 90)
+        self.assertEqual(frame.iloc[0].memory_mean, 1.6)
+        self.assertEqual(frame.iloc[0].memory_max, 3)
+        self.assertTrue(frame.iloc[1].drop('instance').isna().all())
+        queries = client.get_metric_data.call_args.kwargs['MetricDataQueries']
+        self.assertEqual(len(queries), 12)
+        self.assertEqual(queries[3]['MetricStat']['Metric']['MetricName'], 'FreeableMemory')
+        self.assertEqual(queries[0]['MetricStat']['Metric']['Dimensions'],
+                         [{'Name': 'DBInstanceIdentifier', 'Value': 'db-a'}])

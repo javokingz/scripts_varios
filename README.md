@@ -1,4 +1,4 @@
-# Dashboard ECS y RDS con Streamlit
+# Dashboard ECS, RDS y ElastiCache con Streamlit
 
 Prototipo local de solo lectura para comparar cargas de microservicios ECS en distintas cuentas AWS usando perfiles de AWS CLI, roles y SSO. No guarda credenciales ni modifica servicios.
 
@@ -62,7 +62,7 @@ El usuario/rol necesita estas acciones de lectura en cada cuenta (ejemplo para u
   "Version": "2012-10-17",
   "Statement": [{
     "Effect": "Allow",
-    "Action": ["ecs:ListClusters", "ecs:ListServices", "ecs:DescribeServices", "rds:DescribeDBInstances", "cloudwatch:GetMetricData"],
+    "Action": ["ecs:ListClusters", "ecs:ListServices", "ecs:DescribeServices", "rds:DescribeDBInstances", "elasticache:DescribeCacheClusters", "application-autoscaling:DescribeScalableTargets", "cloudwatch:GetMetricData"],
     "Resource": "*"
   }]
 }
@@ -89,3 +89,19 @@ Se consultan `CPUUtilization`, `FreeableMemory` y `DatabaseConnections` de `AWS/
 Referencia: [métricas oficiales de RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/rds-metrics.html).
 
 La tabla inicial de ECS incluye CPU de todos los servicios durante el histórico seleccionado. `cpu_mean` se calcula como suma de CPU dividida entre el número de muestras publicadas y `cpu_max` como el mayor máximo publicado, independientemente de la estadística elegida para las gráficas. Sin muestras, los campos quedan vacíos. El CSV de inventario incluye estas columnas y la ventana UTC. Cambiar el servicio de las gráficas no vuelve a consultar este resumen; cambiar el histórico o pulsar Actualizar sí. Estas métricas requieren consultas adicionales de CloudWatch para todos los servicios del clúster.
+
+La tabla inicial de RDS incluye `cpu_mean` y `cpu_max` en porcentaje, y `memory_mean` y `memory_max` de memoria disponible en GiB para todas las instancias del inventario. Usa el histórico seleccionado; el promedio está ponderado por muestras y el máximo se calcula con los máximos publicados. La estadística elegida para las gráficas no cambia este resumen. Se conserva en la sesión hasta cambiar cuenta, región, inventario o histórico, o pulsar Actualizar. El CSV incluye estos valores, unidades y ventana UTC. Sin muestras los campos quedan vacíos. Se realizan consultas adicionales de CloudWatch para el inventario completo.
+
+La tabla inicial de ECS muestra `tasks_min` y `tasks_max` junto a `desired`: son los límites actuales de Service Auto Scaling, consultados con `application-autoscaling:DescribeScalableTargets`. También se incluyen en el CSV. Sin un target configurado quedan vacíos; si falta permiso, se muestra un aviso. No son mínimos y máximos históricos. Referencia: [DescribeScalableTargets](https://docs.aws.amazon.com/autoscaling/application/APIReference/API_DescribeScalableTargets.html).
+
+## Módulo ElastiCache
+
+El menú incluye **ElastiCache** (`/elasticache`). Descubre todos los nodos de clústeres Redis OSS, Valkey y Memcached de la cuenta y región seleccionadas, con paginación. Esta versión no incluye cachés Serverless. Identifica cada nodo por clúster e ID de nodo para evitar mezclar series.
+
+La tabla inicial muestra inventario y promedio ponderado por muestras y máximo de CPU (%), memoria disponible (GiB) y conexiones para el histórico seleccionado. Las columnas sin datos quedan vacías. El desplegable muestra las gráficas de un único nodo con `CPUUtilization`, `FreeableMemory` y `CurrConnections` de `AWS/ElastiCache`, usando las dimensiones `CacheClusterId` y `CacheNodeId`. CPU corresponde al host, no al hilo del motor, y memoria es RAM disponible del host, no porcentaje de memoria usada por los datos.
+
+Permite 1, 7, 14 o 30 días, intervalos de 5, 15, 30 o 60 minutos y promedio o máximo por intervalo. Incluye resumen del período y CSV de inventario y métricas. El CSV de métricas conserva memoria en bytes; tabla y gráficas la muestran en GiB. Las fechas son UTC y los huecos no se rellenan con cero. Los resultados históricos se conservan en la sesión hasta cambiar filtros o pulsar Actualizar; cambiar de nodo no vuelve a consultar el resumen del inventario completo. Las consultas adicionales de CloudWatch dependen del número de nodos.
+
+Requiere `elasticache:DescribeCacheClusters`, `cloudwatch:GetMetricData` y la verificación compartida con STS. No realiza conexiones a los endpoints de caché ni modifica recursos.
+
+Referencias: [métricas del host](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/CacheMetrics.HostLevel.html), [métricas de Valkey y Redis OSS](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/CacheMetrics.Redis.html), [métricas de Memcached](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/serverless-metrics-events.memcached.html).
